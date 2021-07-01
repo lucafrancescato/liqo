@@ -1,0 +1,9 @@
+rules:
+- apiGroups:
+  - virtualkubelet.liqo.io
+  resources:
+  - namespacemaps
+  verbs:
+  - get
+  - list
+  - watch

@@ -83,6 +83,26 @@ func VirtualKubeletClusterRoleBinding(name, kubeletNamespace, remoteClusterID st
 	}
 }
 
+// VirtualKubeletRoleBinding forges a RoleBinding for a VirtualKubelet to assign permissions in local namespace.
+func VirtualKubeletRoleBinding(name, kubeletNamespace, remoteClusterID string) *rbacv1.RoleBinding {
+	labels := ClusterRoleLabels(remoteClusterID)
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Namespace: kubeletNamespace,
+			Labels: labels,
+		},
+		Subjects: []rbacv1.Subject{
+			{Kind: "ServiceAccount", APIGroup: "", Name: name, Namespace: kubeletNamespace},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "liqo-virtual-kubelet-local-tenant",
+		},
+	}
+}
+
 // VirtualKubeletServiceAccount forges a ServiceAccount for a VirtualKubelet.
 func VirtualKubeletServiceAccount(name, kubeletNamespace string) *v1.ServiceAccount {
 	return &v1.ServiceAccount{

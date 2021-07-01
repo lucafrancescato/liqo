@@ -58,7 +58,7 @@ func forgeVKVolumes(adv *advtypes.Advertisement) []v1.Volume {
 	return volumes
 }
 
-func forgeVKInitContainers(nodeName string, initVKImage string) []v1.Container {
+func forgeVKInitContainers(nodeName, initVKImage string) []v1.Container {
 	return []v1.Container{
 		{
 			Resources: forgeVKResources(),

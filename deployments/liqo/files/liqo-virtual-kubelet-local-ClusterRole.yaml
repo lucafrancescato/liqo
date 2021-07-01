@@ -3,7 +3,6 @@ rules:
   - ""
   resources:
   - configmaps
-  - namespaces
   - secrets
   - services
   verbs:
@@ -15,10 +14,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - namespaces/status
-  - nodes/status
-  - pods/status
-  - services/status
+  - nodes
   verbs:
   - create
   - delete
@@ -30,7 +26,9 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - nodes
+  - nodes/status
+  - pods/status
+  - services/status
   verbs:
   - create
   - delete
@@ -111,15 +109,4 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - virtualkubelet.liqo.io
-  resources:
-  - namespacenattingtables
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+
