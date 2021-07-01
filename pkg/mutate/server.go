@@ -39,7 +39,7 @@ func NewMutationServer(ctx context.Context, c *MutationConfig) (*MutationServer,
 	_ = offv1alpha1.AddToScheme(scheme)
 
 	var err error
-	if s.webhookClient, err = cachedclient.GetCachedClient(ctx, scheme); err != nil {
+	if s.webhookClient, err = cachedclient.GetCachedClient(ctx, scheme, nil); err != nil {
 		return nil, err
 	}
 

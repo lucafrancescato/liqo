@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -9,7 +10,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/options"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/storage"
 )
@@ -23,14 +24,14 @@ const (
 type APIController interface {
 	SetInformingFunc(apiReflection.ApiType, func(interface{}))
 	CacheManager() storage.CacheManagerReaderAdder
-	StartController()
+	StartController(ctx context.Context)
 	StopController() error
 	StopReflection(restart bool)
 }
 
 // Controller is a concrete implementation of the ApiController interface.
 type Controller struct {
-	mapper                       namespacesMapping.MapperController
+	mapper                       namespacesmapping.MapperController
 	cacheManager                 storage.CacheManagerReaderAdder
 	outgoingReflectorsController OutGoingAPIReflectorsController
 	incomingReflectorsController IncomingAPIReflectorsController
@@ -48,8 +49,8 @@ type Controller struct {
 }
 
 // NewAPIController returns a Controller instance for a given set of home and foreign clients.
-func NewAPIController(homeClient, foreignClient kubernetes.Interface, informerResyncPeriod time.Duration,
-	mapper namespacesMapping.MapperController, opts map[options.OptionKey]options.Option, tepReady chan struct{}) *Controller {
+func NewAPIController(ctx context.Context, homeClient, foreignClient kubernetes.Interface, informerResyncPeriod time.Duration,
+	mapper namespacesmapping.MapperController, opts map[options.OptionKey]options.Option, tepReady chan struct{}) *Controller {
 	klog.V(2).Infof("starting reflection manager")
 
 	outgoingReflectionInforming := make(chan apiReflection.ApiEvent)
@@ -58,8 +59,10 @@ func NewAPIController(homeClient, foreignClient kubernetes.Interface, informerRe
 
 	c := &Controller{
 		mapper:                       mapper,
-		outgoingReflectorsController: NewOutgoingReflectorsController(homeClient, foreignClient, cacheManager, outgoingReflectionInforming, mapper, opts),
-		incomingReflectorsController: NewIncomingReflectorsController(homeClient, foreignClient, cacheManager, incomingReflectionInforming, mapper, opts),
+		outgoingReflectorsController: NewOutgoingReflectorsController(ctx, homeClient, foreignClient, cacheManager,
+			outgoingReflectionInforming, mapper, opts),
+		incomingReflectorsController: NewIncomingReflectorsController(ctx, homeClient, foreignClient, cacheManager,
+			incomingReflectionInforming, mapper, opts),
 		outgoingReflectionGroup:      &sync.WaitGroup{},
 		incomingReflectionGroup:      &sync.WaitGroup{},
 		mainControllerRoutine:        &sync.WaitGroup{},
@@ -76,7 +79,7 @@ func NewAPIController(homeClient, foreignClient kubernetes.Interface, informerRe
 		for {
 			select {
 			case <-c.mapper.PollStartMapper():
-				c.StartController()
+				c.StartController(ctx)
 			case <-c.mapper.PollStopMapper():
 				c.StopReflection(true)
 			case <-c.stopController:
@@ -124,7 +127,7 @@ func (c *Controller) CacheManager() storage.CacheManagerReaderAdder {
 }
 
 // StartController spawns the worker threads and starts the reflection control loops.
-func (c *Controller) StartController() {
+func (c *Controller) StartController(ctx context.Context) {
 	klog.V(2).Info("starting api controller")
 
 	c.stopReflection = make(chan struct{})
@@ -139,8 +142,8 @@ func (c *Controller) StartController() {
 		go c.incomingReflectionControlLoop()
 	}
 
-	go c.outgoingReflectorsController.Start()
-	go c.incomingReflectorsController.Start()
+	go c.outgoingReflectorsController.Start(ctx)
+	go c.incomingReflectorsController.Start(ctx)
 
 	c.started = true
 	klog.V(2).Infof("api controller started with %v workers", nOutgoingReflectionWorkers)

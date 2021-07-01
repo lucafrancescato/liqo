@@ -19,7 +19,7 @@ import (
 
 const affinitySelector = liqoconst.TypeNode
 
-func (f *apiForger) podForeignToHome(foreignObj, homeObj runtime.Object, reflectionType string) (*corev1.Pod, error) {
+func (f *apiForger) podForeignToHome(ctx context.Context, foreignObj, homeObj runtime.Object, reflectionType string) (*corev1.Pod, error) {
 	var isNewObject bool
 
 	if homeObj == nil {
@@ -35,7 +35,7 @@ func (f *apiForger) podForeignToHome(foreignObj, homeObj runtime.Object, reflect
 	foreignPod := foreignObj.(*corev1.Pod)
 	homePod := homeObj.(*corev1.Pod)
 
-	foreignNamespace, err := f.nattingTable.DeNatNamespace(foreignPod.Namespace)
+	foreignNamespace, err := f.nattingTable.DeNatNamespace(ctx, foreignPod.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (f *apiForger) setPodToBeDeleted(pod *corev1.Pod) *corev1.Pod {
 	return pod
 }
 
-func (f *apiForger) podHomeToForeign(homeObj, foreignObj runtime.Object, reflectionType string) (*corev1.Pod, error) {
+func (f *apiForger) podHomeToForeign(ctx context.Context, homeObj, foreignObj runtime.Object, reflectionType string) (*corev1.Pod, error) {
 	var isNewObject bool
 	var homePod, foreignPod *corev1.Pod
 
@@ -112,7 +112,7 @@ func (f *apiForger) podHomeToForeign(homeObj, foreignObj runtime.Object, reflect
 
 	homePod = homeObj.(*corev1.Pod)
 
-	foreignNamespace, err := f.nattingTable.NatNamespace(homePod.Namespace, true)
+	foreignNamespace, err := f.nattingTable.NatNamespace(ctx, homePod.Namespace)
 	if err != nil {
 		return nil, err
 	}

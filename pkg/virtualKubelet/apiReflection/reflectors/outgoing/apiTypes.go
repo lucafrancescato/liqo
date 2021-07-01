@@ -1,6 +1,7 @@
 package outgoing
 
 import (
+	"context"
 	"fmt"
 
 	"google.golang.org/grpc"
@@ -14,18 +15,21 @@ import (
 	"github.com/liqotech/liqo/pkg/virtualKubelet/options/types"
 )
 
-var ReflectorBuilders = map[apimgmt.ApiType]func(reflector ri.APIReflector, opts map[options.OptionKey]options.Option) ri.OutgoingAPIReflector{
+// ReflectorBuilders is a map for outgoing reflectors collection. It indexes reflectorBuilders by resource apimgmt resource types.
+var ReflectorBuilders = map[apimgmt.ApiType]func(ctx context.Context, reflector ri.APIReflector,
+	opts map[options.OptionKey]options.Option) ri.OutgoingAPIReflector{
 	apimgmt.Configmaps:     configmapsReflectorBuilder,
 	apimgmt.EndpointSlices: endpointslicesReflectorBuilder,
 	apimgmt.Secrets:        secretsReflectorBuilder,
 	apimgmt.Services:       servicesReflectorBuilder,
 }
 
-func configmapsReflectorBuilder(reflector ri.APIReflector, _ map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
+func configmapsReflectorBuilder(ctx context.Context, reflector ri.APIReflector, _ map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
 	return &ConfigmapsReflector{APIReflector: reflector}
 }
 
-func endpointslicesReflectorBuilder(reflector ri.APIReflector, opts map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
+func endpointslicesReflectorBuilder(ctx context.Context, reflector ri.APIReflector,
+	opts map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
 	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", opts[options.OptionKey(types.LiqoIpamServer)].Value(), liqoconst.NetworkManagerIpamPort),
 		grpc.WithInsecure(),
 		grpc.WithBlock())
@@ -41,10 +45,10 @@ func endpointslicesReflectorBuilder(reflector ri.APIReflector, opts map[options.
 	}
 }
 
-func secretsReflectorBuilder(reflector ri.APIReflector, _ map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
+func secretsReflectorBuilder(ctx context.Context, reflector ri.APIReflector, _ map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
 	return &SecretsReflector{APIReflector: reflector}
 }
 
-func servicesReflectorBuilder(reflector ri.APIReflector, _ map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
+func servicesReflectorBuilder(ctx context.Context, reflector ri.APIReflector, _ map[options.OptionKey]options.Option) ri.OutgoingAPIReflector {
 	return &ServicesReflector{APIReflector: reflector}
 }

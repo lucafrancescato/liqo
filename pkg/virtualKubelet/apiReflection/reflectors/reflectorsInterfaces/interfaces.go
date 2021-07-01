@@ -7,7 +7,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	apimgmt "github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/storage"
 )
 
@@ -20,9 +20,9 @@ const (
 
 type APIPreProcessing interface {
 	PreProcessIsAllowed(context.Context, interface{}) bool
-	PreProcessAdd(obj interface{}) (interface{}, watch.EventType)
-	PreProcessUpdate(newObj, oldObj interface{}) (interface{}, watch.EventType)
-	PreProcessDelete(obj interface{}) (interface{}, watch.EventType)
+	PreProcessAdd(ctx context.Context, obj interface{}) (interface{}, watch.EventType)
+	PreProcessUpdate(ctx context.Context, newObj, oldObj interface{}) (interface{}, watch.EventType)
+	PreProcessDelete(ctx context.Context, obj interface{}) (interface{}, watch.EventType)
 }
 
 type APIReflector interface {
@@ -34,8 +34,8 @@ type APIReflector interface {
 	GetForeignClient() kubernetes.Interface
 	GetHomeClient() kubernetes.Interface
 	GetCacheManager() storage.CacheManagerReader
-	NattingTable() namespacesMapping.NamespaceNatter
-	SetupHandlers(api apimgmt.ApiType, reflectionType ReflectionType, namespace, nattedNs string)
+	NattingTable() namespacesmapping.NamespaceNatter
+	SetupHandlers(ctx context.Context, api apimgmt.ApiType, reflectionType ReflectionType, namespace, nattedNs string)
 	SetPreProcessingHandlers(PreProcessingHandlers)
 
 	SetInforming(handler func(interface{}))
@@ -45,7 +45,7 @@ type APIReflector interface {
 type SpecializedAPIReflector interface {
 	SetSpecializedPreProcessingHandlers()
 	HandleEvent(interface{})
-	CleanupNamespace(namespace string)
+	CleanupNamespace(ctx context.Context, namespace string)
 }
 
 type OutgoingAPIReflector interface {
@@ -60,7 +60,7 @@ type IncomingAPIReflector interface {
 
 type PreProcessingHandlers struct {
 	IsAllowed  func(ctx context.Context, obj interface{}) bool
-	AddFunc    func(obj interface{}) (interface{}, watch.EventType)
-	UpdateFunc func(newObj, oldObj interface{}) (interface{}, watch.EventType)
-	DeleteFunc func(obj interface{}) (interface{}, watch.EventType)
+	AddFunc    func(ctx context.Context, obj interface{}) (interface{}, watch.EventType)
+	UpdateFunc func(ctx context.Context, newObj, oldObj interface{}) (interface{}, watch.EventType)
+	DeleteFunc func(ctx context.Context, obj interface{}) (interface{}, watch.EventType)
 }

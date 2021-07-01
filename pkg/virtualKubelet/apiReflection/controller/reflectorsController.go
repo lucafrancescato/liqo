@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"sync"
 
 	"k8s.io/client-go/kubernetes"
@@ -10,7 +11,7 @@ import (
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors/incoming"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors/outgoing"
 	ri "github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors/reflectorsInterfaces"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/options"
 	reflectionCache "github.com/liqotech/liqo/pkg/virtualKubelet/storage"
 )
@@ -21,21 +22,21 @@ type APIReflectorsController interface {
 }
 
 type SpecializedAPIReflectorsController interface {
-	Start()
+	Start(ctx context.Context)
 }
 
 type OutGoingAPIReflectorsController interface {
 	APIReflectorsController
 	SpecializedAPIReflectorsController
 
-	buildOutgoingReflector(api apimgmt.ApiType, opts map[options.OptionKey]options.Option) ri.OutgoingAPIReflector
+	buildOutgoingReflector(ctx context.Context, api apimgmt.ApiType, opts map[options.OptionKey]options.Option) ri.OutgoingAPIReflector
 }
 
 type IncomingAPIReflectorsController interface {
 	APIReflectorsController
 	SpecializedAPIReflectorsController
 
-	buildIncomingReflector(api apimgmt.ApiType, opts map[options.OptionKey]options.Option) ri.IncomingAPIReflector
+	buildIncomingReflector(ctx context.Context, api apimgmt.ApiType, opts map[options.OptionKey]options.Option) ri.IncomingAPIReflector
 	SetInforming(api apimgmt.ApiType, handler func(interface{}))
 }
 
@@ -47,12 +48,12 @@ type ReflectorsController struct {
 	cacheManager     *reflectionCache.Manager
 	apiReflectors    map[apimgmt.ApiType]ri.APIReflector
 	reflectionGroup  *sync.WaitGroup
-	namespaceNatting namespacesMapping.MapperController
+	namespaceNatting namespacesmapping.MapperController
 	namespacedStops  map[string]chan struct{}
 }
 
-func (c *ReflectorsController) startNamespaceReflection(namespace string) {
-	nattedNs, err := c.namespaceNatting.NatNamespace(namespace, false)
+func (c *ReflectorsController) startNamespaceReflection(ctx context.Context, namespace string) {
+	nattedNs, err := c.namespaceNatting.NatNamespace(ctx, namespace)
 	if err != nil {
 		klog.Errorf("error while natting namespace - ERR: %v", err)
 		return
@@ -67,7 +68,7 @@ func (c *ReflectorsController) startNamespaceReflection(namespace string) {
 		}
 
 		for api := range incoming.ReflectorBuilder {
-			c.apiReflectors[api].SetupHandlers(api, c.reflectionType, namespace, nattedNs)
+			c.apiReflectors[api].SetupHandlers(ctx, api, c.reflectionType, namespace, nattedNs)
 		}
 
 		if err := c.cacheManager.StartForeignNamespace(nattedNs, c.namespacedStops[namespace]); err != nil {
@@ -83,7 +84,7 @@ func (c *ReflectorsController) startNamespaceReflection(namespace string) {
 		}
 
 		for api := range outgoing.ReflectorBuilders {
-			c.apiReflectors[api].SetupHandlers(api, c.reflectionType, namespace, nattedNs)
+			c.apiReflectors[api].SetupHandlers(ctx, api, c.reflectionType, namespace, nattedNs)
 		}
 
 		if err := c.cacheManager.StartHomeNamespace(namespace, c.namespacedStops[namespace]); err != nil {
@@ -96,7 +97,7 @@ func (c *ReflectorsController) startNamespaceReflection(namespace string) {
 	go func() {
 		<-c.namespacedStops[namespace]
 		for _, reflector := range c.apiReflectors {
-			reflector.(ri.SpecializedAPIReflector).CleanupNamespace(namespace)
+			reflector.(ri.SpecializedAPIReflector).CleanupNamespace(ctx, namespace)
 		}
 		c.reflectionGroup.Done()
 	}()

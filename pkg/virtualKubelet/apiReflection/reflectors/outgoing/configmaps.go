@@ -16,10 +16,13 @@ import (
 	"github.com/liqotech/liqo/pkg/virtualKubelet/forge"
 )
 
+// ConfigmapsReflector is the outgoing reflector in charge of detecting status change in home configmaps
+// and pushing the updated object to the remote cluster.
 type ConfigmapsReflector struct {
 	ri.APIReflector
 }
 
+// SetSpecializedPreProcessingHandlers allows to set the pre-routine handlers for the ConfigmapsReflector.
 func (r *ConfigmapsReflector) SetSpecializedPreProcessingHandlers() {
 	r.SetPreProcessingHandlers(ri.PreProcessingHandlers{
 		AddFunc:    r.PreAdd,
@@ -27,51 +30,62 @@ func (r *ConfigmapsReflector) SetSpecializedPreProcessingHandlers() {
 		DeleteFunc: r.PreDelete})
 }
 
+// HandleEvent is the final function call in charge of pushing the homeConfigMap to the remote cluster.
 func (r *ConfigmapsReflector) HandleEvent(e interface{}) {
 	var err error
 
 	event := e.(watch.Event)
-	cm, ok := event.Object.(*corev1.ConfigMap)
+	homeConfigMap, ok := event.Object.(*corev1.ConfigMap)
 	if !ok {
 		klog.Error("OUTGOING REFLECTION: cannot cast object to configMap")
 		return
 	}
-	klog.V(3).Infof("OUTGOING REFLECTION: received %v for configmap %v/%v", event.Type, cm.Namespace, cm.Name)
+	klog.V(3).Infof("OUTGOING REFLECTION: received %v for configmap %v/%v", event.Type, homeConfigMap.Namespace, homeConfigMap.Name)
 
 	switch event.Type {
 	case watch.Added:
-		_, err := r.GetForeignClient().CoreV1().ConfigMaps(cm.Namespace).Create(context.TODO(), cm, metav1.CreateOptions{})
+		_, err := r.GetForeignClient().CoreV1().ConfigMaps(homeConfigMap.Namespace).Create(context.TODO(),
+			homeConfigMap, metav1.CreateOptions{})
 		if kerrors.IsAlreadyExists(err) {
-			klog.V(3).Infof("OUTGOING REFLECTION: The remote configmap %v/%v has not been created because already existing", cm.Namespace, cm.Name)
+			klog.V(3).Infof("OUTGOING REFLECTION: The remote configmap %v/%v has not been created because already existing",
+				homeConfigMap.Namespace, homeConfigMap.Name)
 			break
 		}
 		if err != nil {
-			klog.Errorf("OUTGOING REFLECTION: Error while updating the remote configmap %v/%v - ERR: %v", cm.Namespace, cm.Name, err)
+			klog.Errorf("OUTGOING REFLECTION: Error while updating the remote configmap %v/%v - ERR: %v", homeConfigMap.Namespace, homeConfigMap.Name, err)
 		} else {
-			klog.V(3).Infof("OUTGOING REFLECTION: remote configMap %v/%v correctly created", cm.Namespace, cm.Name)
+			klog.V(3).Infof("OUTGOING REFLECTION: remote configMap %v/%v correctly created", homeConfigMap.Namespace, homeConfigMap.Name)
 		}
 
 	case watch.Modified:
-		if _, err = r.GetForeignClient().CoreV1().ConfigMaps(cm.Namespace).Update(context.TODO(), cm, metav1.UpdateOptions{}); err != nil {
-			klog.Errorf("OUTGOING REFLECTION: Error while updating the remote configmap %v/%v - ERR: %v", cm.Namespace, cm.Name, err)
+		if _, err = r.GetForeignClient().CoreV1().ConfigMaps(homeConfigMap.Namespace).Update(context.TODO(),
+			homeConfigMap, metav1.UpdateOptions{}); err != nil {
+			klog.Errorf("OUTGOING REFLECTION: Error while updating the remote configmap %v/%v - ERR: %v",
+				homeConfigMap.Namespace, homeConfigMap.Name, err)
 		} else {
-			klog.V(3).Infof("OUTGOING REFLECTION: remote configMap %v/%v correctly updated", cm.Namespace, cm.Name)
+			klog.V(3).Infof("OUTGOING REFLECTION: remote configMap %v/%v correctly updated", homeConfigMap.Namespace, homeConfigMap.Name)
 		}
 
 	case watch.Deleted:
-		if err := r.GetForeignClient().CoreV1().ConfigMaps(cm.Namespace).Delete(context.TODO(), cm.Name, metav1.DeleteOptions{}); err != nil {
-			klog.Errorf("OUTGOING REFLECTION: Error while deleting the remote configmap %v/%v - ERR: %v", cm.Namespace, cm.Name, err)
+		if err := r.GetForeignClient().CoreV1().ConfigMaps(homeConfigMap.Namespace).Delete(context.TODO(),
+			homeConfigMap.Name, metav1.DeleteOptions{}); err != nil {
+			klog.Errorf("OUTGOING REFLECTION: Error while deleting the remote configmap %v/%v - ERR: %v",
+				homeConfigMap.Namespace, homeConfigMap.Name, err)
 		} else {
-			klog.V(3).Infof("OUTGOING REFLECTION: remote configMap %v/%v correctly deleted", cm.Namespace, cm.Name)
+			klog.V(3).Infof("OUTGOING REFLECTION: remote configMap %v/%v correctly deleted",
+				homeConfigMap.Namespace, homeConfigMap.Name)
 		}
+	case watch.Error,watch.Bookmark:
 	}
 }
 
-func (r *ConfigmapsReflector) PreAdd(obj interface{}) (interface{}, watch.EventType) {
+// PreAdd is the pre-routine called in case of configMap creation in the home cluster. It returns the foreign object with its
+// status updated.
+func (r *ConfigmapsReflector) PreAdd(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	cmLocal := obj.(*corev1.ConfigMap)
 	klog.V(3).Infof("PreAdd routine started for configmap %v/%v", cmLocal.Namespace, cmLocal.Name)
 
-	nattedNs, err := r.NattingTable().NatNamespace(cmLocal.Namespace, false)
+	nattedNs, err := r.NattingTable().NatNamespace(ctx, cmLocal.Namespace)
 	if err != nil {
 		klog.Error(err)
 		return nil, watch.Added
@@ -96,12 +110,14 @@ func (r *ConfigmapsReflector) PreAdd(obj interface{}) (interface{}, watch.EventT
 	return cmRemote, watch.Added
 }
 
-func (r *ConfigmapsReflector) PreUpdate(newObj, _ interface{}) (interface{}, watch.EventType) {
+// PreUpdate is the pre-routine called in case of configMap update in the home cluster. It returns the foreign object with its
+// status updated and a modified Event.
+func (r *ConfigmapsReflector) PreUpdate(ctx context.Context, newObj, _ interface{}) (interface{}, watch.EventType) {
 	newHomeCm := newObj.(*corev1.ConfigMap).DeepCopy()
 
 	klog.V(3).Infof("PreUpdate routine started for configmap %v/%v", newHomeCm.Namespace, newHomeCm.Name)
 
-	nattedNs, err := r.NattingTable().NatNamespace(newHomeCm.Namespace, false)
+	nattedNs, err := r.NattingTable().NatNamespace(ctx, newHomeCm.Namespace)
 	if err != nil {
 		err = errors.Wrapf(err, "configmap %v/%v", nattedNs, newHomeCm.Name)
 		klog.Error(err)
@@ -139,11 +155,12 @@ func (r *ConfigmapsReflector) PreUpdate(newObj, _ interface{}) (interface{}, wat
 	return newHomeCm, watch.Modified
 }
 
-func (r *ConfigmapsReflector) PreDelete(obj interface{}) (interface{}, watch.EventType) {
+// PreDelete translates the received object with the remote namespace and returns it.
+func (r *ConfigmapsReflector) PreDelete(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	cmLocal := obj.(*corev1.ConfigMap).DeepCopy()
 	klog.V(3).Infof("PreDelete routine started for configmap %v/%v", cmLocal.Namespace, cmLocal.Name)
 
-	nattedNs, err := r.NattingTable().NatNamespace(cmLocal.Namespace, false)
+	nattedNs, err := r.NattingTable().NatNamespace(ctx, cmLocal.Namespace)
 	if err != nil {
 		klog.Error(err)
 		return nil, watch.Deleted
@@ -154,8 +171,10 @@ func (r *ConfigmapsReflector) PreDelete(obj interface{}) (interface{}, watch.Eve
 	return cmLocal, watch.Deleted
 }
 
-func (r *ConfigmapsReflector) CleanupNamespace(localNamespace string) {
-	foreignNamespace, err := r.NattingTable().NatNamespace(localNamespace, false)
+// CleanupNamespace is in charge of cleaning a local namespace from all the reflected objects. All the home objects in
+// the home namespace are fetched and deleted locally. Their deletion will implies the delete of the remote replicas.
+func (r *ConfigmapsReflector) CleanupNamespace(ctx context.Context, localNamespace string) {
+	foreignNamespace, err := r.NattingTable().NatNamespace(ctx, localNamespace)
 	if err != nil {
 		klog.Error(err)
 		return

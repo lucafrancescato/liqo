@@ -25,6 +25,8 @@ var endpointsliceLabels = map[string]string{
 	"endpointslice.kubernetes.io/managed-by": "endpoint-reflector.liqo.io",
 }
 
+// EndpointSlicesReflector is the outgoing reflector in charge of detecting change in home endpointSlice
+// and pushing the updated object to the remote cluster.
 type EndpointSlicesReflector struct {
 	ri.APIReflector
 
@@ -32,6 +34,7 @@ type EndpointSlicesReflector struct {
 	IpamClient      liqonet.IpamClient
 }
 
+// SetSpecializedPreProcessingHandlers allows to set the pre-routine handlers for the EndpointSlicesReflector.
 func (r *EndpointSlicesReflector) SetSpecializedPreProcessingHandlers() {
 	r.SetPreProcessingHandlers(ri.PreProcessingHandlers{
 		IsAllowed:  r.isAllowed,
@@ -40,21 +43,22 @@ func (r *EndpointSlicesReflector) SetSpecializedPreProcessingHandlers() {
 		DeleteFunc: r.PreDelete})
 }
 
+// HandleEvent is the final function call in charge of pushing the homeEndpointSlice to the remote cluster.
 func (r *EndpointSlicesReflector) HandleEvent(e interface{}) {
 	event := e.(watch.Event)
-	ep, ok := event.Object.(*discoveryv1beta1.EndpointSlice)
+	HomeEndpointSlice, ok := event.Object.(*discoveryv1beta1.EndpointSlice)
 	if !ok {
 		klog.Error("REFLECTION: cannot cast object to EndpointSlice")
 		return
 	}
-	key := r.Keyer(ep.Namespace, ep.Name)
+	key := r.Keyer(HomeEndpointSlice.Namespace, HomeEndpointSlice.Name)
 	klog.V(3).Infof("REFLECTION: received %v for EndpointSlice %v", event.Type, key)
 
 	switch event.Type {
 	case watch.Added:
-		_, err := r.GetForeignClient().DiscoveryV1beta1().EndpointSlices(ep.Namespace).Create(context.TODO(), ep, metav1.CreateOptions{})
+		_, err := r.GetForeignClient().DiscoveryV1beta1().EndpointSlices(HomeEndpointSlice.Namespace).Create(context.TODO(), HomeEndpointSlice, metav1.CreateOptions{})
 		if kerrors.IsAlreadyExists(err) {
-			klog.V(4).Infof("REFLECTION: The remote endpointslices %v/%v has not been created because already existing", ep.Namespace, ep.Name)
+			klog.V(4).Infof("REFLECTION: The remote endpointslices %v/%v has not been created because already existing", HomeEndpointSlice.Namespace, HomeEndpointSlice.Name)
 			break
 		}
 		if err != nil {
@@ -65,7 +69,7 @@ func (r *EndpointSlicesReflector) HandleEvent(e interface{}) {
 
 	case watch.Modified:
 		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			_, newErr := r.GetForeignClient().DiscoveryV1beta1().EndpointSlices(ep.Namespace).Update(context.TODO(), ep, metav1.UpdateOptions{})
+			_, newErr := r.GetForeignClient().DiscoveryV1beta1().EndpointSlices(HomeEndpointSlice.Namespace).Update(context.TODO(), HomeEndpointSlice, metav1.UpdateOptions{})
 			return newErr
 		}); err != nil {
 			klog.Errorf("REFLECTION: Error while updating the remote EndpointSlice %v - ERR: %v", key, err)
@@ -74,17 +78,20 @@ func (r *EndpointSlicesReflector) HandleEvent(e interface{}) {
 		}
 
 	case watch.Deleted:
-		if err := r.GetForeignClient().DiscoveryV1beta1().EndpointSlices(ep.Namespace).Delete(context.TODO(), ep.Name, metav1.DeleteOptions{}); err != nil {
+		if err := r.GetForeignClient().DiscoveryV1beta1().EndpointSlices(HomeEndpointSlice.Namespace).Delete(context.TODO(), HomeEndpointSlice.Name, metav1.DeleteOptions{}); err != nil {
 			klog.Errorf("REFLECTION: Error while deleting the remote EndpointSlice %v - ERR: %v", key, err)
 		} else {
 			klog.V(3).Infof("REFLECTION: remote EndpointSlice %v correctly deleted", key)
 		}
+	case watch.Error,watch.Bookmark:
 	}
 }
 
-func (r *EndpointSlicesReflector) PreAdd(obj interface{}) (interface{}, watch.EventType) {
+// PreAdd is the pre-routine called in case of endpoint creation in the home cluster. It returns the foreign object translated for the foreign
+// cluster.
+func (r *EndpointSlicesReflector) PreAdd(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	epLocal := obj.(*discoveryv1beta1.EndpointSlice).DeepCopy()
-	nattedNs, err := r.NattingTable().NatNamespace(epLocal.Namespace, false)
+	nattedNs, err := r.NattingTable().NatNamespace(ctx, epLocal.Namespace)
 	if err != nil {
 		klog.Error(err)
 		return nil, watch.Added
@@ -138,11 +145,13 @@ func (r *EndpointSlicesReflector) PreAdd(obj interface{}) (interface{}, watch.Ev
 	return epsRemote, watch.Added
 }
 
-func (r *EndpointSlicesReflector) PreUpdate(newObj, _ interface{}) (interface{}, watch.EventType) {
+// PreUpdate is the pre-routine called in case of configMap update in the home cluster. It returns the foreign object with its
+// status updated and a modified Event.
+func (r *EndpointSlicesReflector) PreUpdate(ctx context.Context, newObj, _ interface{}) (interface{}, watch.EventType) {
 	endpointSliceHome := newObj.(*discoveryv1beta1.EndpointSlice).DeepCopy()
 	endpointSliceName := endpointSliceHome.Name
 
-	nattedNs, err := r.NattingTable().NatNamespace(endpointSliceHome.Namespace, false)
+	nattedNs, err := r.NattingTable().NatNamespace(ctx, endpointSliceHome.Namespace)
 	if err != nil {
 		klog.Error(err)
 		return nil, watch.Modified
@@ -150,7 +159,7 @@ func (r *EndpointSlicesReflector) PreUpdate(newObj, _ interface{}) (interface{},
 	oldRemoteObj, err := r.GetCacheManager().GetForeignNamespacedObject(apimgmt.EndpointSlices, nattedNs, endpointSliceName)
 	if kerrors.IsNotFound(err) {
 		klog.Info("endpointslices preupdate routine: calling preAdd...")
-		return r.PreAdd(newObj)
+		return r.PreAdd(ctx, newObj)
 	}
 
 	if err != nil {
@@ -166,10 +175,11 @@ func (r *EndpointSlicesReflector) PreUpdate(newObj, _ interface{}) (interface{},
 	return RemoteEpSlice, watch.Modified
 }
 
-func (r *EndpointSlicesReflector) PreDelete(obj interface{}) (interface{}, watch.EventType) {
+// PreDelete translates the received object with the remote namespace and returns it.
+func (r *EndpointSlicesReflector) PreDelete(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	clusterID := strings.TrimPrefix(string(r.VirtualNodeName.Value()), "liqo-")
 	endpointSliceLocal := obj.(*discoveryv1beta1.EndpointSlice)
-	nattedNs, err := r.NattingTable().NatNamespace(endpointSliceLocal.Namespace, false)
+	nattedNs, err := r.NattingTable().NatNamespace(ctx, endpointSliceLocal.Namespace)
 	if err != nil {
 		klog.Error(err)
 		return nil, watch.Deleted
@@ -210,8 +220,10 @@ func filterEndpoints(slice *discoveryv1beta1.EndpointSlice, ipamClient liqonet.I
 	return epList
 }
 
-func (r *EndpointSlicesReflector) CleanupNamespace(localNamespace string) {
-	foreignNamespace, err := r.NattingTable().NatNamespace(localNamespace, false)
+// CleanupNamespace is in charge of cleaning a local namespace from all the reflected objects. All the home objects in
+// the home namespace are fetched and deleted locally. Their deletion will implies the delete of the remote replicas.
+func (r *EndpointSlicesReflector) CleanupNamespace(ctx context.Context, localNamespace string) {
+	foreignNamespace, err := r.NattingTable().NatNamespace(ctx, localNamespace)
 	if err != nil {
 		klog.Error(err)
 		return

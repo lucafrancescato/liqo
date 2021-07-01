@@ -24,6 +24,7 @@ type ReplicaSetsIncomingReflector struct {
 	ri.APIReflector
 }
 
+// SetSpecializedPreProcessingHandlers allows to set the pre-routine handlers for the ReplicaSetsIncomingReflector.
 func (r *ReplicaSetsIncomingReflector) SetSpecializedPreProcessingHandlers() {
 	r.SetPreProcessingHandlers(ri.PreProcessingHandlers{
 		AddFunc:    r.preAdd,
@@ -59,25 +60,26 @@ func (r *ReplicaSetsIncomingReflector) HandleEvent(obj interface{}) {
 		// for allowing the replicasetController to collect it
 		r.PushToInforming(pod)
 		klog.V(3).Infof("INCOMING REFLECTION: delete for replicaset related to home pod %v/%v processed", pod.Namespace, pod.Name)
+	default:
 	}
 }
 
 // preAdd returns always nil because the add events have to be ignored.
-func (r *ReplicaSetsIncomingReflector) preAdd(_ interface{}) (interface{}, watch.EventType) {
+func (r *ReplicaSetsIncomingReflector) preAdd(ctx context.Context, _ interface{}) (interface{}, watch.EventType) {
 	return nil, watch.Added
 }
 
 // preUpdate returns always nil because the add events have to be ignored.
-func (r *ReplicaSetsIncomingReflector) preUpdate(_, _ interface{}) (interface{}, watch.EventType) {
+func (r *ReplicaSetsIncomingReflector) preUpdate(ctx context.Context, _, _ interface{}) (interface{}, watch.EventType) {
 	return nil, watch.Modified
 }
 
 // preDelete receives a replicaset, then gets the home pod named according to a replicaset label,
 // finally the pod is returned.
-func (r *ReplicaSetsIncomingReflector) preDelete(obj interface{}) (interface{}, watch.EventType) {
+func (r *ReplicaSetsIncomingReflector) preDelete(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	foreignReplicaSet := obj.(*appsv1.ReplicaSet).DeepCopy()
 
-	homeNamespace, err := r.NattingTable().DeNatNamespace(foreignReplicaSet.Namespace)
+	homeNamespace, err := r.NattingTable().DeNatNamespace(ctx, foreignReplicaSet.Namespace)
 	if err != nil {
 		klog.Error(err)
 		return nil, watch.Deleted
@@ -132,8 +134,8 @@ func (r *ReplicaSetsIncomingReflector) preDelete(obj interface{}) (interface{}, 
 
 // CleanupNamespace does nothing because the delete of the remote replicasets is already triggered by
 // pods incoming reflector with its CleanupNamespace implementation.
-func (r *ReplicaSetsIncomingReflector) CleanupNamespace(namespace string) {
-	foreignNamespace, err := r.NattingTable().NatNamespace(namespace, false)
+func (r *ReplicaSetsIncomingReflector) CleanupNamespace(ctx context.Context, namespace string) {
+	foreignNamespace, err := r.NattingTable().NatNamespace(ctx, namespace)
 	if err != nil {
 		klog.Error(err)
 		return

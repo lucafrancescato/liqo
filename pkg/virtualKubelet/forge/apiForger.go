@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -14,7 +15,7 @@ import (
 
 	"github.com/liqotech/liqo/pkg/consts"
 	"github.com/liqotech/liqo/pkg/liqonet"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/options"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/options/types"
 )
@@ -28,23 +29,23 @@ func ForeignToHomeStatus(foreignObj, homeObj runtime.Object) (runtime.Object, er
 	return nil, errors.Errorf("error while creating home object status from foreign: api %s unhandled", reflect.TypeOf(foreignObj).String())
 }
 
-func ForeignToHome(foreignObj, homeObj runtime.Object, reflectionType string) (runtime.Object, error) {
+func ForeignToHome(ctx context.Context, foreignObj, homeObj runtime.Object, reflectionType string) (runtime.Object, error) {
 	switch foreignObj.(type) {
 	case *corev1.Pod:
-		return forger.podForeignToHome(foreignObj, homeObj, reflectionType)
+		return forger.podForeignToHome(ctx, foreignObj, homeObj, reflectionType)
 	}
 
 	return nil, errors.Errorf("error while creating home object from foreign: api %s unhandled", reflect.TypeOf(foreignObj).String())
 }
 
-func HomeToForeign(homeObj, foreignObj runtime.Object, reflectionType string) (runtime.Object, error) {
+func HomeToForeign(ctx context.Context, homeObj, foreignObj runtime.Object, reflectionType string) (runtime.Object, error) {
 	switch homeObj.(type) {
 	case *corev1.ConfigMap:
 		return forger.configmapHomeToForeign(homeObj.(*corev1.ConfigMap), foreignObj.(*corev1.ConfigMap))
 	case *discoveryv1beta1.EndpointSlice:
 		return forger.endpointsliceHomeToForeign(homeObj.(*discoveryv1beta1.EndpointSlice), foreignObj.(*discoveryv1beta1.EndpointSlice))
 	case *corev1.Pod:
-		return forger.podHomeToForeign(homeObj, foreignObj, reflectionType)
+		return forger.podHomeToForeign(ctx, homeObj, foreignObj, reflectionType)
 	case *corev1.Service:
 		return forger.serviceHomeToForeign(homeObj.(*corev1.Service), foreignObj.(*corev1.Service))
 	}
@@ -61,7 +62,7 @@ func ForeignReplicasetDeleted(pod *corev1.Pod) *corev1.Pod {
 }
 
 type apiForger struct {
-	nattingTable namespacesMapping.NamespaceNatter
+	nattingTable namespacesmapping.NamespaceNatter
 	ipamClient   liqonet.IpamClient
 
 	virtualNodeName  options.ReadOnlyOption
@@ -72,7 +73,7 @@ type apiForger struct {
 var forger apiForger
 
 // InitForger initialize forger component to set all necessary fields of offloaded resources.
-func InitForger(nattingTable namespacesMapping.NamespaceNatter, opts ...options.ReadOnlyOption) {
+func InitForger(nattingTable namespacesmapping.NamespaceNatter, opts ...options.ReadOnlyOption) {
 	forger.nattingTable = nattingTable
 	for _, opt := range opts {
 		switch opt.Key() {

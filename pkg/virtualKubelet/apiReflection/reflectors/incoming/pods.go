@@ -59,10 +59,10 @@ func (r *PodsIncomingReflector) HandleEvent(e interface{}) {
 
 // PreAdd is the pre-routine called in case of pod creation in the foreign cluster. It returns the home object with its
 // status updated.
-func (r *PodsIncomingReflector) PreAdd(obj interface{}) (interface{}, watch.EventType) {
+func (r *PodsIncomingReflector) PreAdd(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	foreignPod := obj.(*corev1.Pod)
 
-	homePod := r.sharedPreRoutine(foreignPod)
+	homePod := r.sharedPreRoutine(ctx, foreignPod)
 	if homePod == nil {
 		return nil, watch.Added
 	}
@@ -70,16 +70,15 @@ func (r *PodsIncomingReflector) PreAdd(obj interface{}) (interface{}, watch.Even
 	return homePod, watch.Added
 }
 
-// PreAdd is the pre-routine called in case of pod update in the foreign cluster. It returns the home object with its
-// status updated.
-func (r *PodsIncomingReflector) PreUpdate(newObj, _ interface{}) (interface{}, watch.EventType) {
+// PreUpdate returns always nil because the add events have to be ignored.
+func (r *PodsIncomingReflector) PreUpdate(ctx context.Context, newObj, _ interface{}) (interface{}, watch.EventType) {
 	foreignPod := newObj.(*corev1.Pod)
 
 	if foreignPod == nil {
 		return nil, watch.Modified
 	}
 
-	homePod := r.sharedPreRoutine(foreignPod)
+	homePod := r.sharedPreRoutine(ctx, foreignPod)
 	if homePod == nil {
 		return nil, watch.Modified
 	}
@@ -89,7 +88,7 @@ func (r *PodsIncomingReflector) PreUpdate(newObj, _ interface{}) (interface{}, w
 
 // sharedPreRoutine is a common function used by both PreAdd and PreUpdate. It is in charge of fetching the home pod from
 // the internal caches, updating its status and returning to the calling function.
-func (r *PodsIncomingReflector) sharedPreRoutine(foreignPod *corev1.Pod) *corev1.Pod {
+func (r *PodsIncomingReflector) sharedPreRoutine(ctx context.Context, foreignPod *corev1.Pod) *corev1.Pod {
 	if foreignPod.Labels == nil {
 		return nil
 	}
@@ -99,7 +98,7 @@ func (r *PodsIncomingReflector) sharedPreRoutine(foreignPod *corev1.Pod) *corev1
 		return nil
 	}
 
-	homeNamespace, err := r.NattingTable().DeNatNamespace(foreignPod.Namespace)
+	homeNamespace, err := r.NattingTable().DeNatNamespace(ctx, foreignPod.Namespace)
 	if err != nil {
 		klog.Error(err)
 		return nil
@@ -123,7 +122,7 @@ func (r *PodsIncomingReflector) sharedPreRoutine(foreignPod *corev1.Pod) *corev1
 }
 
 // PreDelete removes the received object from the blacklist for freeing the occupied space.
-func (r *PodsIncomingReflector) PreDelete(obj interface{}) (interface{}, watch.EventType) {
+func (r *PodsIncomingReflector) PreDelete(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	foreignPod := obj.(*corev1.Pod)
 	foreignKey := fmt.Sprintf("%s/%s", foreignPod.Namespace, foreignPod.Name)
 	delete(reflectors.Blacklist[apimgmt.Pods], foreignKey)
@@ -134,8 +133,8 @@ func (r *PodsIncomingReflector) PreDelete(obj interface{}) (interface{}, watch.E
 
 // CleanupNamespace is in charge of cleaning a local namespace from all the reflected objects. All the home objects in
 // the home namespace are fetched and deleted locally. Their deletion will implies the delete of the remote replicasets.
-func (r *PodsIncomingReflector) CleanupNamespace(namespace string) {
-	foreignNamespace, err := r.NattingTable().NatNamespace(namespace, false)
+func (r *PodsIncomingReflector) CleanupNamespace(ctx context.Context, namespace string) {
+	foreignNamespace, err := r.NattingTable().NatNamespace(ctx, namespace)
 	if err != nil {
 		klog.Error(err)
 		return

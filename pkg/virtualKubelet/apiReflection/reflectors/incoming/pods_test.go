@@ -1,6 +1,8 @@
 package incoming_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -13,13 +15,14 @@ import (
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors/incoming"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/forge"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping/test"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping/test"
 	storageTest "github.com/liqotech/liqo/pkg/virtualKubelet/storage/test"
 )
 
 var _ = Describe("Pods", func() {
 
 	var (
+		ctx                   = context.Background()
 		cacheManager          *storageTest.MockManager
 		namespaceNattingTable *test.MockNamespaceMapper
 		genericReflector      *reflectors.GenericAPIReflector
@@ -53,7 +56,7 @@ var _ = Describe("Pods", func() {
 
 				DescribeTable("pre add test cases",
 					func(c addTestcase) {
-						ret, _ := reflector.PreProcessAdd(c.input)
+						ret, _ := reflector.PreProcessAdd(ctx, c.input)
 						Expect(ret).To(c.expectedOutput)
 					},
 
@@ -112,7 +115,7 @@ var _ = Describe("Pods", func() {
 							Namespace: "homeNamespace",
 						},
 					}
-					_, _ = namespaceNattingTable.NatNamespace("homeNamespace", true)
+					namespaceNattingTable.NewNamespace("homeNamespace")
 					_ = cacheManager.AddHomeNamespace("homeNamespace")
 					_ = cacheManager.AddForeignNamespace("homeNamespace-natted")
 
@@ -120,14 +123,14 @@ var _ = Describe("Pods", func() {
 				})
 
 				It("correct foreign pod added", func() {
-					ret, _ := reflector.PreProcessAdd(foreignPod)
+					ret, _ := reflector.PreProcessAdd(ctx, foreignPod)
 					Expect(ret.(*corev1.Pod).Name).To(Equal(homePod.Name))
 					Expect(ret.(*corev1.Pod).Namespace).To(Equal(homePod.Namespace))
 					Expect(ret.(*corev1.Pod).Status).To(Equal(foreignPod.Status))
 				})
 
 				It("correct foreign pod updated", func() {
-					ret, _ := reflector.PreProcessUpdate(foreignPod, nil)
+					ret, _ := reflector.PreProcessUpdate(ctx, foreignPod, nil)
 					Expect(ret.(*corev1.Pod).Name).To(Equal(homePod.Name))
 					Expect(ret.(*corev1.Pod).Namespace).To(Equal(homePod.Namespace))
 					Expect(ret.(*corev1.Pod).Status).To(Equal(foreignPod.Status))

@@ -13,7 +13,7 @@ import (
 	apimgmt "github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection"
 	ri "github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors/reflectorsInterfaces"
 	vkContext "github.com/liqotech/liqo/pkg/virtualKubelet/context"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping"
 	reflectionCache "github.com/liqotech/liqo/pkg/virtualKubelet/storage"
 )
 
@@ -28,7 +28,7 @@ type GenericAPIReflector struct {
 
 	CacheManager reflectionCache.CacheManagerReaderAdder
 
-	NamespaceNatting namespacesMapping.NamespaceNatter
+	NamespaceNatting namespacesmapping.NamespaceNatter
 }
 
 func (r *GenericAPIReflector) GetForeignClient() kubernetes.Interface {
@@ -43,7 +43,7 @@ func (r *GenericAPIReflector) GetCacheManager() reflectionCache.CacheManagerRead
 	return r.CacheManager
 }
 
-func (r *GenericAPIReflector) NattingTable() namespacesMapping.NamespaceNatter {
+func (r *GenericAPIReflector) NattingTable() namespacesmapping.NamespaceNatter {
 	return r.NamespaceNatting
 }
 
@@ -54,34 +54,34 @@ func (r *GenericAPIReflector) PreProcessIsAllowed(ctx context.Context, obj inter
 	return r.PreProcessingHandlers.IsAllowed(ctx, obj)
 }
 
-func (r *GenericAPIReflector) PreProcessAdd(obj interface{}) (interface{}, watch.EventType) {
+func (r *GenericAPIReflector) PreProcessAdd(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	if r.PreProcessingHandlers.AddFunc == nil {
 		return obj, watch.Added
 	}
-	return r.PreProcessingHandlers.AddFunc(obj)
+	return r.PreProcessingHandlers.AddFunc(ctx, obj)
 }
 
-func (r *GenericAPIReflector) PreProcessUpdate(newObj, oldObj interface{}) (interface{}, watch.EventType) {
+func (r *GenericAPIReflector) PreProcessUpdate(ctx context.Context, newObj, oldObj interface{}) (interface{}, watch.EventType) {
 	if r.PreProcessingHandlers.UpdateFunc == nil {
 		return newObj, watch.Modified
 	}
-	return r.PreProcessingHandlers.UpdateFunc(newObj, oldObj)
+	return r.PreProcessingHandlers.UpdateFunc(ctx, newObj, oldObj)
 }
 
-func (r *GenericAPIReflector) PreProcessDelete(obj interface{}) (interface{}, watch.EventType) {
+func (r *GenericAPIReflector) PreProcessDelete(ctx context.Context, obj interface{}) (interface{}, watch.EventType) {
 	if r.PreProcessingHandlers.DeleteFunc == nil {
 		return obj, watch.Deleted
 	}
-	return r.PreProcessingHandlers.DeleteFunc(obj)
+	return r.PreProcessingHandlers.DeleteFunc(ctx, obj)
 }
 
-func (r *GenericAPIReflector) SetupHandlers(api apimgmt.ApiType, reflectionType ri.ReflectionType, namespace, nattedNs string) {
+func (r *GenericAPIReflector) SetupHandlers(ctx context.Context, api apimgmt.ApiType, reflectionType ri.ReflectionType, namespace, nattedNs string) {
 	handlers := &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			if ok := r.PreProcessIsAllowed(vkContext.SetIncomingMethod(context.TODO(), vkContext.IncomingAdded), obj); !ok {
+			if ok := r.PreProcessIsAllowed(vkContext.SetIncomingMethod(ctx, vkContext.IncomingAdded), obj); !ok {
 				return
 			}
-			o, event := r.PreProcessAdd(obj)
+			o, event := r.PreProcessAdd(ctx, obj)
 			if o == nil {
 				return
 			}
@@ -94,10 +94,10 @@ func (r *GenericAPIReflector) SetupHandlers(api apimgmt.ApiType, reflectionType 
 			})
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if ok := r.PreProcessIsAllowed(vkContext.SetIncomingMethod(context.TODO(), vkContext.IncomingModified), newObj); !ok {
+			if ok := r.PreProcessIsAllowed(vkContext.SetIncomingMethod(ctx, vkContext.IncomingModified), newObj); !ok {
 				return
 			}
-			o, event := r.PreProcessUpdate(newObj, oldObj)
+			o, event := r.PreProcessUpdate(ctx, newObj, oldObj)
 			if o == nil {
 				return
 			}
@@ -110,10 +110,10 @@ func (r *GenericAPIReflector) SetupHandlers(api apimgmt.ApiType, reflectionType 
 			})
 		},
 		DeleteFunc: func(obj interface{}) {
-			if ok := r.PreProcessIsAllowed(vkContext.SetIncomingMethod(context.TODO(), vkContext.IncomingDeleted), obj); !ok {
+			if ok := r.PreProcessIsAllowed(vkContext.SetIncomingMethod(ctx, vkContext.IncomingDeleted), obj); !ok {
 				return
 			}
-			o, event := r.PreProcessDelete(obj)
+			o, event := r.PreProcessDelete(ctx, obj)
 			if o == nil {
 				return
 			}

@@ -21,7 +21,7 @@ import (
 	apimgmt "github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/reflectors/incoming"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping/test"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping/test"
 	storageTest "github.com/liqotech/liqo/pkg/virtualKubelet/storage/test"
 )
 
@@ -31,6 +31,7 @@ var _ = Describe("Replicasets", func() {
 		namespaceNattingTable *test.MockNamespaceMapper
 		genericReflector      *reflectors.GenericAPIReflector
 		reflector             *incoming.ReplicaSetsIncomingReflector
+		ctx                   = context.Background()
 	)
 
 	BeforeEach(func() {
@@ -57,7 +58,7 @@ var _ = Describe("Replicasets", func() {
 
 			DescribeTable("pre add test cases",
 				func(c addTestcase) {
-					ret, _ := reflector.PreProcessAdd(c.input)
+					ret, _ := reflector.PreProcessAdd(ctx, c.input)
 					Expect(ret).To(BeNil())
 				},
 				Entry("with empty replicaset", addTestcase{
@@ -73,7 +74,7 @@ var _ = Describe("Replicasets", func() {
 
 			DescribeTable("pre update test cases",
 				func(c updateTestcase) {
-					ret, _ := reflector.PreProcessUpdate(c.newInput, c.oldInput)
+					ret, _ := reflector.PreProcessUpdate(ctx, c.newInput, c.oldInput)
 					Expect(ret).To(BeNil())
 				},
 				Entry("empty replicasets", updateTestcase{
@@ -93,8 +94,7 @@ var _ = Describe("Replicasets", func() {
 
 			BeforeEach(func() {
 				homeClient = fake.NewSimpleClientset()
-				_, err := namespaceNattingTable.NatNamespace("homeNamespace", true)
-				Expect(err).NotTo(HaveOccurred())
+				namespaceNattingTable.NewNamespace("homeNamespace")
 				_ = cacheManager.AddHomeNamespace("homeNamespace")
 				_ = cacheManager.AddForeignNamespace("homeNamespace-natted")
 				genericReflector.HomeClient = homeClient
@@ -105,7 +105,7 @@ var _ = Describe("Replicasets", func() {
 					cacheManager.AddHomeEntry("homeNamespace", apimgmt.Pods, c.expected)
 					_, _ = homeClient.CoreV1().Pods("homeNamespace").Create(context.TODO(), c.expected, metav1.CreateOptions{})
 
-					ret, _ := reflector.PreProcessDelete(c.input)
+					ret, _ := reflector.PreProcessDelete(ctx, c.input)
 					Expect(ret.(*corev1.Pod).Name).To(Equal(c.expected.Name))
 					Expect(ret.(*corev1.Pod).Namespace).To(Equal(c.expected.Namespace))
 				},
@@ -226,7 +226,8 @@ var _ = Describe("Replicasets", func() {
 			It("failing delete", func() {
 				reflector.HandleEvent(event)
 				klog.Flush()
-				Expect(strings.Contains(buffer.String(), "INCOMING REFLECTION: delete for replicaset related to home pod homeNamespace/pod1 processed")).To(BeTrue())
+				Expect(strings.Contains(buffer.String(),
+					"INCOMING REFLECTION: delete for replicaset related to home pod homeNamespace/pod1 processed")).To(BeTrue())
 			})
 		})
 	})

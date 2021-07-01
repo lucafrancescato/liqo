@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -18,14 +19,14 @@ import (
 	"github.com/liqotech/liqo/pkg/virtualKubelet"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection/controller"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/forge"
-	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesMapping"
+	"github.com/liqotech/liqo/pkg/virtualKubelet/namespacesmapping"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/options"
 	optTypes "github.com/liqotech/liqo/pkg/virtualKubelet/options/types"
 )
 
 // LiqoProvider implements the virtual-kubelet provider interface and stores pods in memory.
 type LiqoProvider struct {
-	namespaceMapper namespacesMapping.MapperController
+	namespaceMapper namespacesmapping.MapperController
 	apiController   controller.APIController
 
 	tepReady             chan struct{}
@@ -49,7 +50,7 @@ type LiqoProvider struct {
 }
 
 // NewLiqoProvider creates a new NewLiqoProvider instance.
-func NewLiqoProvider(nodeName, foreignClusterID, homeClusterID, internalIP string, daemonEndpointPort int32, kubeconfig,
+func NewLiqoProvider(ctx context.Context, nodeName, foreignClusterID, homeClusterID, internalIP string, daemonEndpointPort int32, kubeconfig,
 	remoteKubeConfig string, informerResyncPeriod time.Duration, ipamGRPCServer string, useNewAuth bool) (*LiqoProvider, error) {
 	var err error
 
@@ -100,11 +101,10 @@ func NewLiqoProvider(nodeName, foreignClusterID, homeClusterID, internalIP strin
 		return nil, err
 	}
 
-	mapper, err := namespacesMapping.NewNamespaceMapperController(client, foreignClient, homeClusterID, foreignClusterID)
+	mapper, err := namespacesmapping.NewNamespaceMapperController(context.Background(), homeClusterID, foreignClusterID)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	mapper.WaitForSync()
 
 	virtualNodeNameOpt := optTypes.NewNetworkingOption(optTypes.VirtualNodeName, optTypes.NetworkingValue(nodeName))
 	grpcServerNameOpt := optTypes.NewNetworkingOption(optTypes.LiqoIpamServer, optTypes.NetworkingValue(ipamGRPCServer))
@@ -119,7 +119,7 @@ func NewLiqoProvider(nodeName, foreignClusterID, homeClusterID, internalIP strin
 	tepReady := make(chan struct{})
 
 	provider := LiqoProvider{
-		apiController:         controller.NewAPIController(client.Client(), foreignClient, informerResyncPeriod, mapper, opts, tepReady),
+		apiController:         controller.NewAPIController(ctx, client.Client(), foreignClient, informerResyncPeriod, mapper, opts, tepReady),
 		namespaceMapper:       mapper,
 		nodeName:              virtualNodeNameOpt,
 		internalIP:            internalIP,

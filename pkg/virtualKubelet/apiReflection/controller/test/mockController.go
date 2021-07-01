@@ -1,6 +1,8 @@
 package test
 
 import (
+	"context"
+
 	apimgmt "github.com/liqotech/liqo/pkg/virtualKubelet/apiReflection"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/storage"
 )
@@ -17,7 +19,7 @@ func (m MockController) CacheManager() storage.CacheManagerReaderAdder {
 	return m.Manager
 }
 
-func (m MockController) StartController() {
+func (m MockController) StartController(ctx context.Context) {
 	panic("implement me")
 }
 
