@@ -1,10 +1,9 @@
 ---
-title: Play with a micro-service application
+title: Deploy an application
 weight: 5
 ---
 
-So far, you tested Liqo with a simple `nginx` application, but Liqo can be used with more complex micro-services.
-
+So far, you tested Liqo with a simple `nginx` application, specifically crafted to show the Liqo offloading capabilities. However, Liqo can be used with completely more sophisticated applications, such as one with several micro-services.
 ##  Deploy a micro-service application in Liqo
 
 For a complete demo of the capabilities of Liqo, we can play with a micro-services application provided by [Google](https://github.com/GoogleCloudPlatform/microservices-demo), which includes multiple cooperating services:
@@ -17,7 +16,7 @@ By default, Kubernetes schedules each pod either in the local or in the remote c
 However, you can play with *affinity* constraints as presented in the [*exploit foreign resources*](../test) section to force the scheduling of each component in a specific location, and see that everything continues to work smoothly.
 
 Each demo component is exposed as a service and accessed by other components.
-However, given that nobody knows, a priori, where each service will be deployed (either locally or in the remote cluster), Liqo _replicates_ all Kubernetes services across both clusters, although the corresponding pod may be running only in one location.
+However, given that nobody knows, a priori, where the pod acting as endpoints of each service will be deployed (either locally or in the remote cluster), Liqo _replicates_ all Kubernetes services across both clusters, although the corresponding pod may be running only in one location.
 Hence, each micro-service deployed across clusters can reach the others seamlessly: independently from the cluster a pod is deployed in, each pod can contact other services and leverage the traditional Kubernetes discovery mechanisms (e.g. DNS, Environment variables).
 
 Additionally, several other objects (e.g. `configmap` and `secrets`) inside a namespace are replicated in the remote cluster within the "virtual twin" namespace, thus, ensuring that complex applications can work seamlessly across clusters.

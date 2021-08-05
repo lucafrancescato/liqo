@@ -1,11 +1,10 @@
 ---
-title: Use resources available in a foreign cluster
+title: Use resources in a foreign cluster
 weight: 4
 ---
 
-This fourth step allows to verify that the resulting infrastructure works correctly.
-This is done by showing the deployment of a small *Hello World*  service in presence of two peered clusters (*home* and *foreign*).
-This demonstrates the capability of Liqo to leverage resources available in a foreign cluster, and how it can start a pod either in the local (*home*) or remote (*foreign*) cluster, transparently, without any change in the user experience.
+This fourth step allows verifying that the virtual node you added to the cluster works correctly.
+To do so, you will create a small *Hello World* application using the two peered clusters (*home* and *foreign*). This simple test demonstrates the capability of Liqo to leverage resources available in a foreign cluster, and how it can start a pod either in the local (*home*) or remote (*foreign*) cluster, transparently, without any change in the user experience.
 
 ## Start a Hello World pod
 
@@ -14,7 +13,7 @@ First, ensure you have configured your KUBECONFIG to point to your home cluster.
 export KUBECONFIG=home-kubeconfig.yaml
 ```
 
-If you want to deploy an application schedulable on the Liqo node, you should create a namespace where your pod will be started and label it as ```liqo.io/enabled=true```. Indirectly, this label will tell the Kubernetes scheduler that the namespace spans across the foreign clusters as well.
+If you want to deploy an application schedulable on the Liqo node, you should create a namespace where your pod will be started and label it as ```liqo.io/enabled=true```. Indirectly, this label will tell the Kubernetes scheduler and the Liqo control plane that the namespace spans across the foreign clusters as well. If you want to know more about the Liqo namespace model and its functioning, you can have a look to the [dedicated section](/user/use/namespace_offloading/).
 
 ```shell script
 kubectl create namespace liqo-demo
@@ -26,13 +25,12 @@ Then, you can deploy a demo application in the `liqo-demo` namespace:
 ```shell script
 kubectl apply -f https://raw.githubusercontent.com/liqotech/liqo/master/docs/examples/hello-world.yaml -n liqo-demo
 ```
-The `hello-world.yaml` file is a simple `nginx` service; it is composed of two pods running an `nginx` image, and a service exposing the pods to the cluster; the reason for having _two_ `nginx` pods is to create a configuration in which one pod runs in the local cluster, while the other is forced to be scheduled on the remote cluster.
+The `hello-world.yaml` file is a simple `nginx` application. It is composed of two pods running an `nginx` image, and a service exposing the pods to the cluster. The reason for having _two_ `nginx` pods is to create a configuration in which one pod runs in the local cluster, while the other is forced to be scheduled on the remote cluster.
 
 {{%expand "Expand here for a more advanced explanation of what happens under the hood:" %}}
 
 The complete `hello-world.yaml` file is as follows:
 {{% render-code file="static/examples/hello-world.yaml" language="yaml" %}}
-
 
 Differently from the traditional examples, the above deployment introduces an *affinity* constraint. This forces Kubernetes to schedule the first pod (i.e. `nginx-local`) on a physical node, and the second one (i.e. `nginx-remote`) on a virtual node.
 Virtual nodes are like traditional Kubernetes nodes, but they represent foreign clusters and are labelled with `liqo.io/type: virtual-node`.
@@ -56,7 +54,9 @@ nginx-remote   1/1     Running   0          76s   172.16.97.219   liqo-9a596a4b-
 ## Check the pod connectivity
 
 Once both pods are correctly running, it is possible to check one of the abstractions introduced by Liqo.
-Indeed, Liqo enables each pod to be transparently contacted by every other pod and physical node (according to the Kubernetes model), regardless of whether it is hosted by the _local_ or by the foreign cluster.
+Indeed, Liqo enables each pod to be transparently contacted by every other pod and physical node (according to the Kubernetes model). This trasparent interconnection is possible regardless of whether it is hosted by the _local_ or by the foreign cluster.
+
+Now, let's verify that the two pods have Pod-to-Pod connectivity.
 
 First, let's retrieve the IP address of the `nginx` pods:
 
@@ -119,25 +119,25 @@ At the bottom of the displayed demo web-page, you should see the IP address and 
 If you try reloading the page, you can observe a difference: the hostname should alternate between `nginx-local` and `nginx-remote`. This change confirms that Kubernetes correctly leverage both pods as back-ends (i.e., endpoints) of the service.
 
 Similarly, you can also use `curl` to perform the same verification (execute this command multiple times to contact both endpoints):
-```
+```shell script
 curl --silent ${SVC_IP} | grep 'Server'
 ```
 
 If you do not have direct connectivity, on the other hand, you can fire up a pod and run `curl` from inside:
-```
+```shell script
 kubectl run --image=curlimages/curl curl -n default -it --rm --restart=Never -- curl --silent ${SVC_IP} | grep 'Server'
 ```
 Also in this case, if you execute the command multiple times, you should observe an alternation between the local and the remote endpoint.
 
 Finally, you can also connect to the service through its _service name_, which exploits the Kubernetes DNS service:
 
-```
+```shell script
 kubectl run --image=curlimages/curl curl -n default -it --rm --restart=Never -- curl --silent http://liqo-demo.liqo-demo | grep 'Server'
 ```
 
 Now, you are ready to move to the [next section](../play), which plays with a more sophisticated application composed of multiple micro-services.
 
-> **Clean-up**: If you want to delete the deployed example, just issue:
-> ```
-> kubectl delete -f https://raw.githubusercontent.com/LiqoTech/liqo/master/docs/examples/hello-world.yaml -n liqo-demo
-> ```
+>**Clean-up**: If you want to delete the deployed example, just issue:
+>```shell script
+>kubectl delete -f https://raw.githubusercontent.com/LiqoTech/liqo/master/docs/examples/hello-world.yaml -n liqo-demo
+>```

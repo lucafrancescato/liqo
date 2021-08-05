@@ -1,24 +1,13 @@
 ---
-title: Provision the Liqo Playground
+title: Set up the Playground
 weight: 1
 ---
 
 Before testing Liqo, we should create a pair of clusters to use it.
 
-### Requirements
+# Deploy the clusters
 
-The Liqo playground set-up has the following requirements:
-
-* You should have installed [Docker](https://docker.io) on your machine. The following guide is also compatible with Mac Os X and Windows (with Docker Desktop).
-
-* [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/), the official Kubernetes client, is not mandatory for this step, but is strongly recommended to explore the playground and for next steps.
-
-* `curl` can be easily installed on linux and Mac Os X. For example on Ubuntu, curl can be simply installed by typing:
-`sudo apt update && sudo apt install -y curl`
-
-## Deploy the clusters
-
-Let's open a terminal and launch the clusters scripts:
+After having installed the [requirements](/gettingstarted#system-requirements), let's open a terminal and launch the clusters scripts:
 
 ```bash
 source <(curl -L https://get.liqo.io/clusters.sh)
