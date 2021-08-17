@@ -12,7 +12,8 @@ cluster available nearby.
 
 ## Why Liqo
 
-As Kubernetes gains adoption, clusters start to be everywhere: on private data-centers, on the cloud, at the edge of the network and so on. With Liqo, your applications and services can leverage those resources, by creating dynamic and opportunistic peerings of clusters.
+As Kubernetes gains adoption, clusters start to be everywhere: on private data-centers, on the cloud, at the edge of the network and so on. 
+With Liqo, your applications and services can leverage those resources, by creating dynamic and opportunistic peerings of clusters.
 
 
 Liqo is completely open source, and designed to be network plugin (CNI) and Kubernetes-distribution agnostic. Liqo does not require any modification to your Kubernetes cluster to work.

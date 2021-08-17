@@ -8,195 +8,138 @@ weight: 2
 Liqo can be used with different topologies and scenarios. This impacts several installation parameters you will configure (e.g., API Server, Authentication).
 Before installing Liqo, you should:
 * Provision the clusters you would like to use with Liqo. If you need some advice about how to provision clusters on major providers, we have provided [here](./platforms/) some tips.
-* Have a look to the [scenarios page](./pre-install) presents some common patterns used to expose and interconnect clusters.
+* Have a look to the [scenarios page](Advanced/_index.md) presents some common patterns used to expose and interconnect clusters.
 
 ### Quick Install
 
 #### Pre-Requirements
 
-To install Liqo, you have to install the following dependencies:
+To install Liqo, you have to install the liqoctl:
 
-* [Helm 3](https://helm.sh/docs/intro/install/)
-* [jq](https://stedolan.github.io/jq/download/)
-
-To install Liqo on your cluster, you should know:
-
-* **PodCIDR**, the address space of IPs assigned to Pods
-* **ServiceCIDR**:  the address space of IPs assigned to ClusterIP services
+```bash
+#(Draft)
+OS=linux # possible values: linux,windows,darwin
+ARCH=amd64 # possible values: amd64,arm64 
+curl -LS https://get.liqo.io/liqoctl-${OS}-${ARCH} -output-file liqoctl && chmod +x liqoctl && sudo cp liqoctl /usr/bin/liqoctl
+```
 
 {{% notice note %}}
 Liqo only supports Kubernetes >= 1.19.0.
 {{% /notice %}}
 
-Depending on the provider, you have different way to retrieve those parameters. For more information, you can check in the following subsections:
+According to your cluster provider, you may have to perform simple steps before triggering the installation process:
 
-{{%expand " Kubeadm" %}}
-To retrieve PodCIDR and ServiceCIDR in a Kubeadm cluster, you can just extract it from the kube-controller-manager spec:
+{{< tabs >}}
+{{% tab name="K8s (Kubeadm)" %}}
 
-```bash
-POD_CIDR=$(kubectl get pods --namespace kube-system --selector component=kube-controller-manager --output jsonpath="{.items[*].spec.containers[*].command}" 2>/dev/null | grep -Po --max-count=1 "(?<=--cluster-cidr=)[0-9.\/]+")
-SERVICE_CIDR=$(kubectl get pods --namespace kube-system --selector component=kube-controller-manager --output jsonpath="{.items[*].spec.containers[*].command}" 2>/dev/null | grep -Po --max-count=1 "(?<=--service-cluster-ip-range=)[0-9.\/]+")
-echo "POD CIDR: $POD_CIDR"
-echo "SERVICE CIDR: $SERVICE_CIDR"
-```
-{{% /expand%}}
-
-{{%expand " AWS Elastic Kubernetes Service (EKS)" %}}
-Create an AWS IAM user for Liqo, it will use it to grant access on the required resource to the remote clusters:
-```bash
-LIQO_USER_NAME=liqo
-LIQO_POLICY_NAME=liqo
-LIQO_CLUSTER_REGION=eu-west-1
-LIQO_CLUSTER_NAME=liqo-cluster
-```
+**Optional**: You only have to export the KUBECONFIG environment variable. 
+Otherwise, liqoctl will try to use the kubeconfig in kubectl default path (i.e. `${HOME}/.kube/config` )
 
 ```bash
-# create the liqo user
-aws iam create-user --user-name "$LIQO_USER_NAME" > /dev/null
-
-# create access keys for the user
-aws iam create-access-key --user-name "$LIQO_USER_NAME" > iamKeys.json
-
-# get the accessKeyId
-cat iamKeys.json | jq -r '.AccessKey.AccessKeyId'
-
-# get the secretAccessKey
-cat iamKeys.json | jq -r '.AccessKey.SecretAccessKey'
+export KUBECONFIG=/your/kubeconfig/path
 ```
 
-{{% notice warning %}}
-To ensure the security of your account, the secret access key is accessible only during key and user creation. You must save the key (for example, in a text file) if you want to be able to access it again. If a secret key is lost, you can delete the access keys for the associated user and then create new keys.
+{{% /tab %}}
+
+{{% tab name="EKS" %}}
+
+To install Liqo on EKS, you should login using the AWS cli (if you already did that, you can skip this step)
+This is widely documented on the [official CLI documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html).
+
+In a nutshell, after having installed the CLI, you just have to run:
+```bash
+aws configure
+```
+
+{{% notice note %}}
+To install Liqo on your cluster, the AWS user you configure must have the following permissions: *iam:CreatePolicy*,*iam:AttachUserPolicy*,*iam:CreateUser*,*vpc:DescribeVPC*
 {{% /notice %}}
 
-Now, create the policy required by the Liqo user and bind it
-```bash
-# create the policy file
-cat > policy << EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "VisualEditor0",
-            "Effect": "Allow",
-            "Action": [
-                "iam:CreateUser",
-                "iam:CreateAccessKey"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "VisualEditor1",
-            "Effect": "Allow",
-            "Action": "eks:DescribeCluster",
-            "Resource": "*"
-        }
-    ]
-}
-EOF
+Second, you should export the cluster's kubeconfig if you have not already. You may use the following CLI command:
 
-# create the AWS policy
-POLICY_ARN=$(aws iam create-policy --policy-name $LIQO_POLICY_NAME --policy-document file://policy | jq -r '.Policy.Arn')
-
-# bind the policy to the liqo user
-aws iam attach-user-policy --policy-arn "$POLICY_ARN" --user-name "$LIQO_USER_NAME"
-```
-
-Retrieve information about your clusters, typing:
-```bash
-POD_CIDR=$(aws eks describe-cluster --name ${LIQO_CLUSTER_NAME} --region ${LIQO_CLUSTER_REGION} | jq -r '.cluster.resourcesVpcConfig.vpcId' | xargs aws ec2 describe-vpcs --vpc-ids --region ${LIQO_CLUSTER_REGION} | jq -r '.Vpcs[0].CidrBlock')
-```
-{{% /expand%}}
-
-{{%expand " Azure Kubernetes Service (AKS)" %}}
-
-AKS clusters have by default with the following PodCIDR and ServiceCIDR:
-
-If you are using Azure CNI:
+{{% notice note %}}
+To run the following command, you must have permission to use the `eks:DescribeCluster` API action with the cluster you specify.
+{{% /notice %}}
 
 ```bash
-SUBNET_ID=$(az aks list --query="[?name=='__YOUR_CLUSTER_NAME__']" | jq -r '.[0].agentPoolProfiles[0].vnetSubnetId')
-POD_CIDR=$(az network vnet subnet show --ids ${SUBNET_ID} | jq -r .addressPrefix)
-SERVICE_CIDR=$(az aks list --query="[?name=='__YOUR_CLUSTER_NAME__']" | jq -r ".[0].networkProfile.serviceCidr")
+aws eks --region ${EKS_CLUSTER_REGION} update-kubeconfig --name ${EKS_CLUSTER_NAME}
+```
+{{% /tab %}}
+
+{{% tab name="AKS" %}}
+First, you should have the AZ cli installed and your AKS cluster deployed. If you haven't, you can follow the [official guide](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli).
+
+Second, you should log-in:
+```bash
+az login
 ```
 
-Or Kubenet:
+You also need read-only permissions on AKS cluster and on the Virtual Networks, if your cluster has an Azure CNI.
+
+{{% /tab %}}
+{{% tab name="GKE" %}}
+To install Liqo on GKE, you should at first create a service account for liqoctl, granting the read rights for the GKE clusters (you may reduce the scope to a specific cluster if you prefer):
 
 ```bash
-POD_CIDR=$(az network vnet subnet show --ids ${SUBNET_ID} | jq -r ".[0].networkProfile.serviceCidr)
-SERVICE_CIDR=$(az aks list --query="[?name=='__YOUR_CLUSTER_NAME__']" | jq -r ".[0].networkProfile.serviceCidr")
-SERVICE_CIDR=$(az aks list --query="[?name=='__YOUR_CLUSTER_NAME__']" | jq -r ".[0].networkProfile.serviceCidr")
+gcloud iam service-accounts create ${SERVICE_ACCOUNT_ID} \
+    --description="DESCRIPTION" \
+    --display-name="DISPLAY_NAME"
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:SERVICE_ACCOUNT_ID@PROJECT_ID.iam.gserviceaccount.com" \
+    --role="ROLE_NAME"
 ```
 
+Then, you should create and download a service accounts key, as presented [by the official documentation](https://cloud.google.com/iam/docs/creating-managing-service-account-keys#creating_service_account_keys):
+```bash
+gcloud iam service-accounts keys create ${SERVICE_ACCOUNT_PATH} \
+    --iam-account=s${sa-name}@${project-id}.iam.gserviceaccount.com
+```
 
-{{% /expand%}}
-{{%expand " Google Kubernetes Engine (GKE)" %}}
+{{% /tab %}}
+{{% tab name="K3s" %}}
+**Optional**: You only have to export the KUBECONFIG environment variable.
+Otherwise, liqoctl will try to use the kubeconfig in kubectl default path (i.e. `${HOME}/.kube/config` )
 
 ```bash
-SERVICE_CIDR=$(gcloud container clusters describe ${LIQO_CLUSTER_NAME} --zone -__YOUR_ZONE__ --project __YOUR_PROJECT_ID__ --format="json" | jq -r '.servicesIpv4Cidr')
-POD_CIDR=$(gcloud container clusters describe ${LIQO_CLUSTER_NAME} --zone -__YOUR_ZONE__ --project __YOUR_PROJECT_ID__ --format="json" | jq -r '.clusterIpv4Cidr')
+export KUBECONFIG=/your/kubeconfig/path
 ```
+{{% /tab %}}
+{{< /tabs >}}
 
-{{% /expand%}}
-{{%expand "K3s" %}}
+#### Install
 
-K3s clusters have by default with the following PodCIDR and ServiceCIDR:
+{{< tabs >}}
+{{% tab name="K8s (Kubeadm)" %}}
+```bash
+liqoctl install --provider kubeadm
+```
+{{% /tab %}}
+{{% tab name="EKS" %}}
 
-| Variable               | Default | Description                                 |
-| ---------------------- | ------- | ------------------------------------------- |
-| `networkManager.config.podCIDR`             |    10.42.0.0/16     |
-| `networkManager.config.serviceCIDR`         |    10.43.0.0/16     |
-{{% /expand%}}
-
-#### Set-Up Liqo Repository
-
-Firstly, you should add the official Liqo repository to your Helm Configuration:
+{{% notice note %}}
+To run the following command, you must have permission to use the `eks:DescribeCluster` API action with the cluster you specify.
+{{% /notice %}}
 
 ```bash
-helm repo add liqo https://helm.liqo.io/
+liqoctl install --provider eks --eks.region=${EKS_CLUSTER_REGION} --eks.cluster-name=${EKS_CLUSTER_NAME} 
 ```
-
-#### Set-up
-
-The most important values you can set are the following:
-
-| Variable               | Description                                 |
-| ---------------------- | ------------------------------------------- |
-| `networkManager.config.podCIDR`        | The cluster Pod CIDR                                 |
-| `networkManager.config.serviceCIDR`    | The cluster Service CIDR                             |
-| `discovery.config.clusterLabels`       | Labels used to characterize your cluster's resources |
-| `auth.config.allowEmptyToken`          | Enable/disable [cluster pre-authentication](/User/Configure/Authentication)            |
-
-##### Additional AWS values
-
-| Variable               | Description                                 |
-| ---------------------- | ------------------------------------------- |
-| `awsConfig.accessKeyId`        | The Liqo user AccessKeyId                                 |
-| `awsConfig.secretAccessKey`    | The Liqo user SecretAccessKey                             |
-| `awsConfig.region`       | The region where your local EKS cluster is deployed |
-| `awsConfig.clusterName`          | The name of your local EKS cluster (the one used when you deployed it)            |
-
-Example:
-
+{{% /tab %}}
+{{% tab name="AKS" %}}
 ```bash
-API_SERVER=$(kubectl config view --minify | grep server | cut -f 2- -d ":" | tr -d " ")
-helm install liqo liqo/liqo -n liqo --create-namespace  \
-    --set networkManager.config.podCIDR="${POD_CIDR}" \
-    --set networkManager.config.serviceCIDR="${SERVICE_CIDR}" \
-    --set discovery.config.clusterLabels.region="A" \
-    --set discovery.config.clusterLabels.foo="bar" 
+liqoctl install --provider aks --aks.resource-group-name ${AZURE_RESOURCE_GROUP} --aks.resource-name ${AZURE_RESOURCE_NAME} --aks.subscription-id ${AZURE_SUBSCRIPTION_ID}"
 ```
-
-After a couple of minutes, the installation process will be completed. You can check if Liqo is running by:
-
+{{% /tab %}}
+{{% tab name="GKE" %}}
 ```bash
-kubectl get pods -n liqo
+liqoctl install --provider gke --gke.project-id=${GKE_PROJECT_ID} --gke.cluster-id=${GKE_CLUSTER_ID} --gke.zone=${GKE_CLUSTER_ZONE} --gke.credentials-path=${SERVICE_ACCOUNT_PATH}
 ```
-
-You should see a similar output:
-
+{{% /tab %}}
+{{% tab name="K3s" %}}
 ```bash
-
+liqoctl install --provider kubeadm
 ```
+{{% /tab %}}
+{{< /tabs >}}
 
 #### Next Steps
 
