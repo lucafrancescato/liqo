@@ -86,8 +86,11 @@ gcloud iam service-accounts create ${SERVICE_ACCOUNT_ID} \
     --display-name="DISPLAY_NAME" \
     --project="${PROJECT_ID}"
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-    --member="serviceAccount:SERVICE_ACCOUNT_ID@PROJECT_ID.iam.gserviceaccount.com" \
-    --role="ROLE_NAME"
+    --member="serviceAccount:${SERVICE_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --role="roles/container.clusterViewer"
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${SERVICE_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --role="roles/compute.networkViewer"
 ```
 
 Then, you should create and download a service accounts key, as presented [by the official documentation](https://cloud.google.com/iam/docs/creating-managing-service-account-keys#creating_service_account_keys):
