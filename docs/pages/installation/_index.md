@@ -92,7 +92,7 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
 Then, you should create and download a service accounts key, as presented [by the official documentation](https://cloud.google.com/iam/docs/creating-managing-service-account-keys#creating_service_account_keys):
 ```bash
 gcloud iam service-accounts keys create ${SERVICE_ACCOUNT_PATH} \
-    --iam-account=s${sa-name}@${project-id}.iam.gserviceaccount.com
+    --iam-account=${SERVICE_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com
 ```
 
 {{% /tab %}}
