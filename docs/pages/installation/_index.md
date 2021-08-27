@@ -14,13 +14,19 @@ Before installing Liqo, you should:
 
 #### Pre-Requirements
 
-To install Liqo, you have to install the liqoctl:
+To install Liqo, you have to install to set the architecture and OS of your host:
 
 ```bash
 #(Draft)
 OS=linux # possible values: linux,windows,darwin
 ARCH=amd64 # possible values: amd64,arm64 
-curl -LS https://get.liqo.io/liqoctl-${OS}-${ARCH} -output-file liqoctl && chmod +x liqoctl && sudo cp liqoctl /usr/bin/liqoctl
+```
+
+Then install the last version of liqoctl:
+```
+LATEST_RELEASE=$(curl -L -s -H 'Accept: application/json' https://github.com/liqotech/liqo/releases/latest)
+LATEST_VERSION=$(echo $LATEST_RELEASE | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
+curl --fail -LSO https://github.com/liqotech/liqo/releases/download/${LATEST_VERSION}/liqoctl-${OS}-${ARCH} && chmod +x liqoctl && sudo cp liqoctl-${OS}-${ARCH} /usr/bin/liqoctl
 ```
 
 {{% notice note %}}
@@ -51,9 +57,32 @@ In a nutshell, after having installed the CLI, you just have to run:
 aws configure
 ```
 
-{{% notice note %}}
-To install Liqo on your cluster, the AWS user you configure must have the following permissions: *iam:CreatePolicy*,*iam:AttachUserPolicy*,*iam:CreateUser*,*vpc:DescribeVPC*
-{{% /notice %}}
+```
+cat << EOF > liqo-policy.json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateUser",
+                "iam:CreateAccessKey",
+                "eks:DescribeCluster",
+                "iam:GetUser",
+                "iam:AttachUserPolicy",
+                "iam:CreatePolicy",
+                "ec2:DescribeVpcs",
+                "ec2:DescribeSubnets",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+aws iam create-policy --policy-name liqo-install-policy --policy-document file://lqio-policy.json
+```
 
 Second, you should export the cluster's kubeconfig if you have not already. You may use the following CLI command:
 
@@ -74,11 +103,25 @@ Second, you should log-in:
 az login
 ```
 
+```bash
+export AZURE_RESOURCE_GROUP=my-resourceGroup # the resourceGroup where the cluster is created
+export AKS_RESOURCE_NAME=my-cluster # the name of AKS cluster resource on Azure
+export AZURE_SUBSCRIPTION_ID=subscription-id # the subscription id associated to the AKS cluster's resource group 
+```
+
 You also need read-only permissions on AKS cluster and on the Virtual Networks, if your cluster has an Azure CNI.
 
 {{% /tab %}}
 {{% tab name="GKE" %}}
-To install Liqo on GKE, you should at first create a service account for liqoctl, granting the read rights for the GKE clusters (you may reduce the scope to a specific cluster if you prefer):
+To install Liqo on GKE, you should at first create a service account for liqoctl, granting the read rights for the GKE clusters (you may reduce the scope to a specific cluster if you prefer).
+
+First, let's start exporting required variables:
+```bash
+export SERVICE_ACCOUNT_ID=liqoctl-sa #the name of the service account used to interact by liqoctl with GCP
+export PROJECT_ID=XYZ # the id of the cluster project
+export SERVICE_ACCOUNT_PATH=~/.liqo/gcp_service_account # the path where the google service account is stored
+export GKE_CLUSTER_ZONE=europe-west-1b # the GCP zone where your GKE cluster is executed
+```
 
 ```bash
 gcloud iam service-accounts create ${SERVICE_ACCOUNT_ID} \
@@ -135,6 +178,8 @@ liqoctl install --provider aks --aks.resource-group-name ${AZURE_RESOURCE_GROUP}
 {{% /tab %}}
 {{% tab name="GKE" %}}
 ```bash
+export KUBECONFIG=/your/kubeconfig/path
+
 liqoctl install --provider gke --gke.project-id=${GKE_PROJECT_ID} --gke.cluster-id=${GKE_CLUSTER_ID} --gke.zone=${GKE_CLUSTER_ZONE} --gke.credentials-path=${SERVICE_ACCOUNT_PATH}
 ```
 {{% /tab %}}
