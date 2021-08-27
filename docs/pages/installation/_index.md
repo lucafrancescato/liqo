@@ -83,7 +83,8 @@ To install Liqo on GKE, you should at first create a service account for liqoctl
 ```bash
 gcloud iam service-accounts create ${SERVICE_ACCOUNT_ID} \
     --description="DESCRIPTION" \
-    --display-name="DISPLAY_NAME"
+    --display-name="DISPLAY_NAME" \
+    --project="${PROJECT_ID}"
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:SERVICE_ACCOUNT_ID@PROJECT_ID.iam.gserviceaccount.com" \
     --role="ROLE_NAME"
