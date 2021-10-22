@@ -104,7 +104,7 @@ func (r *ConfigmapsReflector) PreAdd(obj interface{}) (interface{}, watch.EventT
 	for k, v := range cmLocal.Labels {
 		cmRemote.Labels[k] = v
 	}
-	cmRemote.Labels[forge.LiqoOutgoingKey] = forge.LiqoNodeName()
+	cmRemote.Labels[forge.LiqoOutgoingKey] = forge.LiqoNodeName
 
 	klog.V(3).Infof("PreAdd routine completed for configmap %v/%v", cmLocal.Namespace, cmLocal.Name)
 	return cmRemote, watch.Added
@@ -140,7 +140,7 @@ func (r *ConfigmapsReflector) PreUpdate(newObj, _ interface{}) (interface{}, wat
 	for k, v := range oldRemoteCm.Labels {
 		newHomeCm.Labels[k] = v
 	}
-	newHomeCm.Labels[forge.LiqoOutgoingKey] = forge.LiqoNodeName()
+	newHomeCm.Labels[forge.LiqoOutgoingKey] = forge.LiqoNodeName
 
 	if newHomeCm.Annotations == nil {
 		newHomeCm.Annotations = make(map[string]string)

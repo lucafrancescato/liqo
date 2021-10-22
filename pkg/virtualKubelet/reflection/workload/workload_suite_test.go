@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package exposition_test
+package workload_test
 
 import (
 	"context"
@@ -26,7 +26,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/liqotech/liqo/pkg/virtualKubelet/forge"
 	"github.com/liqotech/liqo/pkg/virtualKubelet/reflection/options"
@@ -43,17 +42,11 @@ const (
 	LiqoNodeIP   = "1.1.1.1"
 )
 
-var (
-	testEnv envtest.Environment
-	client  kubernetes.Interface
-
-	ctx    context.Context
-	cancel context.CancelFunc
-)
+var ctx context.Context
 
 func TestService(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Exposition Reflection Suite")
+	RunSpecs(t, "Workload Reflection Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -63,26 +56,10 @@ var _ = BeforeSuite(func() {
 	Expect(flagset.Set("v", "4")).To(Succeed())
 	klog.LogToStderr(false)
 
-	ctx, cancel = context.WithCancel(context.Background())
-
-	testEnv = envtest.Environment{}
-	cfg, err := testEnv.Start()
-	Expect(err).ToNot(HaveOccurred())
-
-	// Need to use a real client, as server side apply seems not to be currently supported by the fake one.
-	client = kubernetes.NewForConfigOrDie(cfg)
-	_, err = client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: LocalNamespace}}, metav1.CreateOptions{})
-	Expect(err).ToNot(HaveOccurred())
-	_, err = client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: RemoteNamespace}}, metav1.CreateOptions{})
-	Expect(err).ToNot(HaveOccurred())
-
 	forge.Init(LocalClusterID, RemoteClusterID, LiqoNodeName, LiqoNodeIP)
 })
 
-var _ = AfterSuite(func() {
-	cancel()
-	Expect(testEnv.Stop()).To(Succeed())
-})
+var _ = BeforeEach(func() { ctx = context.Background() })
 
 var FakeEventHandler = func(options.Keyer) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
@@ -90,4 +67,15 @@ var FakeEventHandler = func(options.Keyer) cache.ResourceEventHandler {
 		UpdateFunc: func(_, obj interface{}) {},
 		DeleteFunc: func(_ interface{}) {},
 	}
+}
+
+var GetPod = func(client kubernetes.Interface, namespace, name string) *corev1.Pod {
+	pod, errpod := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	Expect(errpod).ToNot(HaveOccurred())
+	return pod
+}
+
+var GetPodError = func(client kubernetes.Interface, namespace, name string) error {
+	_, errpod := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	return errpod
 }

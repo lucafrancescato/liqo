@@ -53,7 +53,7 @@ type manager struct {
 func New(local, remote kubernetes.Interface, resync time.Duration) Manager {
 	// Configure the field selector to retrieve only the pods scheduled on the current virtual node.
 	localPodTweakListOptions := func(opts *metav1.ListOptions) {
-		opts.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", forge.LiqoNodeName()).String()
+		opts.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", forge.LiqoNodeName).String()
 	}
 
 	return &manager{

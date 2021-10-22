@@ -20,7 +20,6 @@ require (
 	github.com/metal-stack/go-ipam v1.8.4-0.20210322080203-5a9da5064b27
 	github.com/miekg/dns v1.1.35
 	github.com/mittwald/go-helm-client v0.8.1
-	github.com/modern-go/reflect2 v1.0.1
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.16.0
 	github.com/openshift/api v0.0.0-20210521075222-e273a339932a
