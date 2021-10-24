@@ -35,7 +35,6 @@ require (
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae
 	golang.org/x/oauth2 v0.0.0-20210628180205-a41e5a781914 // indirect
 	golang.org/x/sys v0.0.0-20210817190340-bfb29a6856f2
-	golang.org/x/tools v0.1.4 // indirect
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200609130330-bd2cb7843e1b
 	gomodules.xyz/jsonpatch/v2 v2.2.0
 	google.golang.org/api v0.48.0
@@ -56,6 +55,8 @@ require (
 	k8s.io/utils v0.0.0-20210820185131-d34e5cb4466e
 	sigs.k8s.io/aws-iam-authenticator v0.5.3
 	sigs.k8s.io/controller-runtime v0.10.0
+	sigs.k8s.io/controller-tools v0.6.2 // indirect
+	sigs.k8s.io/structured-merge-diff/v3 v3.0.0 // indirect
 )
 
 replace github.com/virtual-kubelet/virtual-kubelet => github.com/liqotech/virtual-kubelet v1.5.1-0.20210726130647-f2333d82a6de

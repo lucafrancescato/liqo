@@ -26,6 +26,7 @@ import (
 type ShadowPodSpec struct {
 	// Pod contains the complete Kubernetes pod specification.
 	// +kubebuilder:validation:EmbeddedResource
+	// +kubebuilder:pruning:PreserveUnknownFields
 	Pod runtime.RawExtension `json:"pod"`
 }
 

@@ -1,4 +1,4 @@
-SHELL := /bin/bash -O globstar
+# SHELL := /bin/bash -O globstar
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"

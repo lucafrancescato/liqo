@@ -40,6 +40,7 @@ spec:
                 description: Pod contains the complete Kubernetes pod specification.
                 type: object
                 x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
             required:
             - pod
             type: object
