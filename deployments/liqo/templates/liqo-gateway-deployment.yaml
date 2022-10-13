@@ -43,8 +43,6 @@ spec:
           command: ["/usr/bin/liqonet"]
           args:
           - --run-as=liqo-gateway
-          - --cluster-id=$(CLUSTER_ID)
-          - --cluster-name=$(CLUSTER_NAME)
           - --gateway.leader-elect=true
           - --gateway.mtu={{ .Values.networkConfig.mtu }}
           - --gateway.listening-port={{ .Values.gateway.config.listeningPort }}
@@ -70,14 +68,4 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: CLUSTER_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "liqo.clusterIdConfig" . }}
-                  key: CLUSTER_ID
-            - name: CLUSTER_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "liqo.clusterIdConfig" . }}
-                  key: CLUSTER_NAME
       hostNetwork: true
